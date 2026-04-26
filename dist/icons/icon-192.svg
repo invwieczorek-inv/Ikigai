@@ -1,0 +1,6 @@
+<svg viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg">
+  <rect width="192" height="192" fill="#181410" rx="0"/>
+  <circle cx="96" cy="96" r="72" fill="none" stroke="#c9a96e" stroke-width="0.8" opacity="0.25"/>
+  <circle cx="96" cy="96" r="56" fill="none" stroke="#c9a96e" stroke-width="0.5" opacity="0.15"/>
+  <text x="96" y="116" font-family="Georgia, serif" font-size="68" fill="#c9a96e" text-anchor="middle" opacity="0.92">生</text>
+</svg>

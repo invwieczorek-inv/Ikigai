@@ -1,0 +1,179 @@
+import { useState } from 'react';
+import { getProfiles, createProfile, verifyPin, deleteProfileMeta } from '../profile';
+import { clearProfileDB } from '../db';
+
+function PinInput({ onSubmit, error, loading }) {
+  const [pin, setPin] = useState('');
+
+  const handleKey = (digit) => {
+    if (pin.length >= 4) return;
+    const next = pin + digit;
+    setPin(next);
+    if (next.length === 4) {
+      onSubmit(next);
+      setTimeout(() => setPin(''), 400);
+    }
+  };
+
+  const handleDel = () => setPin(p => p.slice(0, -1));
+
+  return (
+    <div>
+      <div className="flex gap-16" style={{ justifyContent: 'center', marginBottom: 24 }}>
+        {[0, 1, 2, 3].map(i => (
+          <div key={i} style={{
+            width: 14, height: 14, borderRadius: '50%',
+            background: i < pin.length ? 'var(--gold)' : 'var(--border)',
+            transition: 'background 0.15s',
+          }} />
+        ))}
+      </div>
+      {error && (
+        <p style={{ color: 'var(--red)', textAlign: 'center', fontSize: '0.88rem', marginBottom: 12 }}>
+          {error}
+        </p>
+      )}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 64px)', gap: 10, justifyContent: 'center' }}>
+        {[1,2,3,4,5,6,7,8,9].map(d => (
+          <button key={d} onClick={() => handleKey(String(d))} disabled={loading} style={{
+            height: 64, fontSize: '1.4rem', background: 'var(--surface)',
+            border: '1px solid var(--border)', borderRadius: 12,
+            color: 'var(--text)', cursor: 'pointer',
+          }}>{d}</button>
+        ))}
+        <div />
+        <button onClick={() => handleKey('0')} disabled={loading} style={{
+          height: 64, fontSize: '1.4rem', background: 'var(--surface)',
+          border: '1px solid var(--border)', borderRadius: 12,
+          color: 'var(--text)', cursor: 'pointer',
+        }}>0</button>
+        <button onClick={handleDel} disabled={loading} style={{
+          height: 64, fontSize: '1.2rem', background: 'transparent',
+          border: 'none', color: 'var(--text-muted)', cursor: 'pointer',
+        }}>⌫</button>
+      </div>
+    </div>
+  );
+}
+
+function CreateProfileForm({ onCreated, onCancel }) {
+  const [name, setName] = useState('');
+  const [pin, setPin] = useState('');
+  const [pin2, setPin2] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!name.trim()) return setError('Podaj imię lub nazwę');
+    if (pin.length !== 4 || !/^\d{4}$/.test(pin)) return setError('PIN musi mieć 4 cyfry');
+    if (pin !== pin2) return setError('PINy nie są zgodne');
+    setLoading(true);
+    try {
+      const profile = await createProfile(name, pin);
+      onCreated(profile);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="fade-in">
+      <h3 style={{ marginBottom: 20, textAlign: 'center' }}>Nowy profil</h3>
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ fontSize: '0.82rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 2, display: 'block', marginBottom: 6 }}>Imię / nazwa</label>
+        <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="np. Anna" autoFocus style={{ fontSize: '1rem' }} />
+      </div>
+      <div style={{ marginBottom: 16 }}>
+        <label style={{ fontSize: '0.82rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 2, display: 'block', marginBottom: 6 }}>PIN (4 cyfry)</label>
+        <input type="password" inputMode="numeric" maxLength={4} value={pin} onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="••••" style={{ fontSize: '1.5rem', letterSpacing: 8 }} />
+      </div>
+      <div style={{ marginBottom: 20 }}>
+        <label style={{ fontSize: '0.82rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: 2, display: 'block', marginBottom: 6 }}>Powtórz PIN</label>
+        <input type="password" inputMode="numeric" maxLength={4} value={pin2} onChange={e => setPin2(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="••••" style={{ fontSize: '1.5rem', letterSpacing: 8 }} />
+      </div>
+      {error && <p style={{ color: 'var(--red)', fontSize: '0.88rem', marginBottom: 12 }}>{error}</p>}
+      <div className="flex gap-8">
+        <button type="submit" className="btn-primary" disabled={loading} style={{ flex: 1 }}>{loading ? 'Tworzę...' : 'Utwórz profil'}</button>
+        <button type="button" className="btn-ghost" onClick={onCancel}>Anuluj</button>
+      </div>
+    </form>
+  );
+}
+
+export default function ProfileScreen({ onLogin }) {
+  const [profiles, setProfiles] = useState(getProfiles);
+  const [selected, setSelected] = useState(null);
+  const [pinError, setPinError] = useState('');
+  const [pinLoading, setPinLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+
+  const handleSelectProfile = (profile) => { setSelected(profile); setPinError(''); };
+
+  const handlePinSubmit = async (pin) => {
+    setPinLoading(true); setPinError('');
+    const ok = await verifyPin(selected.id, pin);
+    setPinLoading(false);
+    if (ok) { onLogin(selected); } else { setPinError('Nieprawidłowy PIN'); }
+  };
+
+  const handleCreated = (profile) => { setProfiles(getProfiles()); setCreating(false); onLogin(profile); };
+
+  const handleDelete = async (profileId) => {
+    await clearProfileDB(profileId);
+    deleteProfileMeta(profileId);
+    setProfiles(getProfiles());
+    setDeleteConfirm(null);
+    if (selected?.id === profileId) setSelected(null);
+  };
+
+  return (
+    <div className="flex-col flex-center fade-in" style={{ minHeight: '100vh', padding: '40px 24px', maxWidth: 480, margin: '0 auto' }}>
+      <div style={{ fontSize: 56, color: 'var(--gold)', fontFamily: 'Georgia, serif', opacity: 0.8, marginBottom: 16 }}>生き甲斐</div>
+      <h1 style={{ fontSize: '1.6rem', marginBottom: 8, textAlign: 'center' }}>Kto teraz używa aplikacji?</h1>
+      <p style={{ color: 'var(--text-muted)', marginBottom: 32, textAlign: 'center', fontSize: '0.95rem' }}>Każdy profil ma oddzielne sesje i historię.</p>
+
+      {creating ? (
+        <div className="card" style={{ width: '100%' }}><CreateProfileForm onCreated={handleCreated} onCancel={() => setCreating(false)} /></div>
+      ) : selected ? (
+        <div className="card fade-in" style={{ width: '100%', textAlign: 'center' }}>
+          <div style={{ fontSize: 40, marginBottom: 8 }}>👤</div>
+          <h2 style={{ marginBottom: 4 }}>{selected.name}</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginBottom: 24 }}>Podaj PIN</p>
+          <PinInput onSubmit={handlePinSubmit} error={pinError} loading={pinLoading} />
+          <button className="btn-ghost" onClick={() => setSelected(null)} style={{ marginTop: 20, width: '100%' }}>← Wybierz inny profil</button>
+        </div>
+      ) : (
+        <div style={{ width: '100%' }}>
+          {profiles.length === 0 ? (
+            <div className="text-center" style={{ color: 'var(--text-muted)', marginBottom: 24 }}>Brak profili. Utwórz pierwszy.</div>
+          ) : (
+            <div className="flex-col gap-8 mb-16">
+              {profiles.map(p => (
+                <div key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <button className="card" onClick={() => handleSelectProfile(p)} style={{ flex: 1, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 16, padding: '14px 18px', margin: 0 }}>
+                    <div style={{ width: 42, height: 42, borderRadius: '50%', background: 'var(--gold-dim)', border: '1px solid var(--gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', color: 'var(--gold)', fontFamily: 'Georgia, serif', flexShrink: 0 }}>{p.name[0].toUpperCase()}</div>
+                    <span style={{ fontSize: '1.05rem' }}>{p.name}</span>
+                    <span style={{ marginLeft: 'auto', color: 'var(--gold)', fontSize: '0.85rem' }}>Wejdź →</span>
+                  </button>
+                  {deleteConfirm === p.id ? (
+                    <div className="flex gap-4">
+                      <button className="btn-ghost" style={{ fontSize: '0.75rem', color: 'var(--red)', padding: '6px 8px' }} onClick={() => handleDelete(p.id)}>Usuń</button>
+                      <button className="btn-ghost" style={{ fontSize: '0.75rem', padding: '6px 8px' }} onClick={() => setDeleteConfirm(null)}>✕</button>
+                    </div>
+                  ) : (
+                    <button className="btn-ghost" style={{ padding: '8px', color: 'var(--text-dim)', fontSize: '0.8rem' }} onClick={() => setDeleteConfirm(p.id)} title="Usuń profil">🗑</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          <button className="btn-primary" onClick={() => setCreating(true)} style={{ width: '100%', padding: '14px' }}>+ Nowy profil</button>
+        </div>
+      )}
+    </div>
+  );
+}

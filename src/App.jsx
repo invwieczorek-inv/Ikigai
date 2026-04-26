@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { DB, uuid, monthsAgo } from './db';
+import { DB, uuid, monthsAgo, setActiveProfile } from './db';
 import { CONTENT_PHASES, CORRECTION_PHASE_IDS } from './constants';
 import Header from './screens/Header';
+import ProfileScreen from './screens/ProfileScreen';
 import Onboarding from './screens/Onboarding';
 import HomeScreen from './screens/HomeScreen';
 import SessionScreen from './screens/SessionScreen';
@@ -12,37 +13,37 @@ import SettingsScreen from './screens/SettingsScreen';
 
 export default function App() {
   const [view, setView] = useState('loading');
+  const [profile, setProfile] = useState(null);
   const [sessions, setSessions] = useState([]);
   const [activeSessionId, setActiveSessionId] = useState(null);
   const [reportSessionId, setReportSessionId] = useState(null);
   const [compareIds, setCompareIds] = useState([]);
   const [theme, setTheme] = useState('dark');
-  const [draftPrompt, setDraftPrompt] = useState(null); // { id, date }
+  const [draftPrompt, setDraftPrompt] = useState(null);
 
   // ─── Init ───────────────────────────────────────────────────────
   useEffect(() => {
-    (async () => {
-      const saved = localStorage.getItem('ikigai_theme') ||
-        (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-      applyTheme(saved);
+    const saved = localStorage.getItem('ikigai_theme') ||
+      (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    applyTheme(saved);
+    setView('profile');
+  }, []);
 
-      const allSessions = await DB.getSessions();
-      setSessions(allSessions);
+  const handleLogin = useCallback(async (prof) => {
+    setProfile(prof);
+    setActiveProfile(prof.id);
 
-      const onboarded = localStorage.getItem('ikigai_onboarded');
-      if (!onboarded) { setView('onboarding'); return; }
+    const allSessions = await DB.getSessions();
+    setSessions(allSessions);
 
-      // Check for unfinished draft
-      const draft = allSessions.find(s => s.status === 'draft');
-      if (draft) {
-        setDraftPrompt({ id: draft.id, date: draft.date });
-      }
+    const onboarded = localStorage.getItem(`ikigai_onboarded_${prof.id}`);
+    if (!onboarded) { setView('onboarding'); return; }
 
-      // Check notification reminder
-      checkNotificationReminder(allSessions);
+    const draft = allSessions.find(s => s.status === 'draft');
+    if (draft) setDraftPrompt({ id: draft.id, date: draft.date });
 
-      setView('home');
-    })();
+    checkNotificationReminder(allSessions);
+    setView('home');
   }, []);
 
   const applyTheme = (t) => {
@@ -121,9 +122,9 @@ export default function App() {
   }, []);
 
   const handleOnboardingDone = useCallback(() => {
-    localStorage.setItem('ikigai_onboarded', '1');
+    localStorage.setItem(`ikigai_onboarded_${profile?.id}`, '1');
     setView('home');
-  }, []);
+  }, [profile]);
 
   const toggleTheme = useCallback(() => {
     applyTheme(theme === 'dark' ? 'light' : 'dark');
@@ -136,6 +137,10 @@ export default function App() {
         <div className="spinner" />
       </div>
     );
+  }
+
+  if (view === 'profile') {
+    return <ProfileScreen onLogin={handleLogin} />;
   }
 
   if (view === 'onboarding') {
@@ -155,7 +160,9 @@ export default function App() {
         onHome={() => setView('home')}
         onHistory={() => setView('history')}
         onSettings={() => setView('settings')}
+        onLogout={() => { setProfile(null); setSessions([]); setDraftPrompt(null); setView('profile'); }}
         sessionCount={completedSessions.length}
+        profileName={profile?.name}
       />
       <main>
         {view === 'home' && (
