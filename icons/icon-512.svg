@@ -1,0 +1,7 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" fill="#181410" rx="0"/>
+  <circle cx="256" cy="256" r="192" fill="none" stroke="#c9a96e" stroke-width="1.5" opacity="0.2"/>
+  <circle cx="256" cy="256" r="148" fill="none" stroke="#c9a96e" stroke-width="1" opacity="0.12"/>
+  <text x="256" y="310" font-family="Georgia, serif" font-size="180" fill="#c9a96e" text-anchor="middle" opacity="0.92">生</text>
+  <text x="256" y="388" font-family="Georgia, serif" font-size="28" fill="#c9a96e" text-anchor="middle" opacity="0.45" letter-spacing="8">IKIGAI</text>
+</svg>
